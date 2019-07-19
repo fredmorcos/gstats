@@ -3,6 +3,7 @@
 use crate::id::{Id, NonRootId};
 use crate::transaction::{self, Transaction};
 use derive_more::Display;
+use std::collections::{HashMap as Map, HashSet as Set};
 use std::convert::TryFrom;
 use std::io::{self, BufRead, BufReader, Read};
 use std::num::ParseIntError;
@@ -49,16 +50,22 @@ impl From<transaction::Error> for Error {
 }
 
 /// Primary `Graph` data structure.
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Default)]
 pub struct Graph {
     /// The list of transactions.
     inner: Vec<Transaction>,
+
+    /// The reverse references. A map from transaction `Id`s (including the Root
+    /// transaction) to the set of transactions pointing to it, including the number of
+    /// edges pointing to it.
+    reverse: Map<Id, Set<NonRootId>>,
 }
 
 impl Graph {
     pub fn with_capacity(cap: usize) -> Self {
         Self {
             inner: Vec::with_capacity(cap),
+            reverse: Map::with_capacity(cap + 1),
         }
     }
 
@@ -72,6 +79,103 @@ impl Graph {
 
     pub fn transactions(&self) -> impl Iterator<Item = &Transaction> {
         self.inner.iter()
+    }
+
+    fn references(&self, id: Id) -> Option<&Set<NonRootId>> {
+        self.reverse.get(&id)
+    }
+
+    fn push(&mut self, transaction: Transaction) {
+        // Insert a new entry for incoming references to the left reference of the
+        // transaction.
+        let left_references = self
+            .reverse
+            .entry(transaction.left())
+            .or_insert_with(Set::new);
+
+        // Insert the new source transaction for the incoming reference and increment the
+        // number of incoming references.
+        left_references.insert(transaction.id());
+
+        // Insert a new entry for incoming references to the right reference of the
+        // transaction.
+        let right_references = self
+            .reverse
+            .entry(transaction.right())
+            .or_insert_with(Set::new);
+
+        // Insert the new source transaction for the incoming reference and increment the
+        // number of incoming references.
+        right_references.insert(transaction.id());
+
+        self.inner.push(transaction);
+    }
+
+    /// Check whether the `Graph` is connected and acyclic.
+    pub fn is_connected_acyclic(&self) -> Option<bool> {
+        fn helper(graph: &Graph, vertex: Id, mut history: Set<Id>, visited: &mut Set<Id>) -> bool {
+            if history.contains(&vertex) {
+                return false;
+            }
+
+            history.insert(vertex);
+            visited.insert(vertex);
+
+            if let Some(references) = graph.references(vertex) {
+                for next in references {
+                    if !helper(graph, Id::Transaction(*next), history.clone(), visited) {
+                        return false;
+                    }
+                }
+            }
+
+            true
+        }
+
+        let history = Set::new();
+        let mut visited = Set::new();
+        let res = helper(self, Id::Root, history, &mut visited);
+
+        if visited.len() == self.len() + 1 {
+            Some(res)
+        } else {
+            None
+        }
+    }
+
+    /// Check whether the `Graph` is bipartite. Uses a two-coloring
+    /// implementation. Assumes all vertices are reachable from the Root transaction.
+    pub fn is_bipartite(&self) -> bool {
+        fn helper(graph: &Graph, vertex: Id, color: bool, colors: &mut Map<Id, bool>) -> bool {
+            if let Some(c) = colors.get(&vertex) {
+                // If the current transaction is already colored and it does not match
+                // with the prospective color, then the graph cannot be bipartite.
+                if *c != color {
+                    return false;
+                }
+            } else {
+                // If the current transaction is not colored, insert its color into the
+                // "visited"/"colored" transactions accumulator.
+                colors.insert(vertex, color);
+            }
+
+            if let Some(references) = graph.references(vertex) {
+                // Recursively follow in-references with the opposite color.
+                for next in references {
+                    if !helper(graph, Id::from(*next), !color, colors) {
+                        return false;
+                    }
+                }
+            }
+
+            true
+        }
+
+        // Call the helper with the color accumulator starting at the Root. Due to the
+        // structure of our graphs and the assumptions we make, every transaction should
+        // be inverse-reachable from the Root.
+        let mut colors = Map::new();
+        helper(self, Id::Root, false, &mut colors)
     }
 }
 
@@ -121,10 +225,10 @@ impl<R: Read> TryFrom<BufReader<R>> for Graph {
                 return Err(Error::InvalidRight(t.id(), t.right(), max));
             }
 
-            graph.inner.push(t);
+            graph.push(t);
         }
 
-        if graph.inner.len() < n_transactions {
+        if graph.len() < n_transactions {
             // The number of transactions read is lower than the expected number.
             return Err(Error::TooLittleTransactions);
         }
@@ -142,20 +246,90 @@ mod graph_tests {
     use std::io::BufReader;
 
     fn graph() -> Graph {
-        let second_id = NonRootId::try_from(2).unwrap();
-        let second_left = Id::try_from(1).unwrap();
-        let second_right = Id::try_from(1).unwrap();
+        let mut graph = Graph::default();
 
-        let third_id = NonRootId::try_from(3).unwrap();
-        let third_left = Id::try_from(2).unwrap();
-        let third_right = Id::try_from(1).unwrap();
+        graph.push(Transaction::new(
+            NonRootId::try_from(2).unwrap(),
+            Id::try_from(1).unwrap(),
+            Id::try_from(1).unwrap(),
+            120,
+        ));
 
-        Graph {
-            inner: vec![
-                Transaction::new(second_id, second_left, second_right, 120),
-                Transaction::new(third_id, third_left, third_right, 130),
-            ],
-        }
+        graph.push(Transaction::new(
+            NonRootId::try_from(3).unwrap(),
+            Id::try_from(2).unwrap(),
+            Id::try_from(1).unwrap(),
+            130,
+        ));
+
+        graph
+    }
+
+    fn bp_graph() -> Graph {
+        let mut graph = Graph::default();
+
+        graph.push(Transaction::new(
+            NonRootId::try_from(2).unwrap(),
+            Id::try_from(1).unwrap(),
+            Id::try_from(1).unwrap(),
+            120,
+        ));
+
+        graph.push(Transaction::new(
+            NonRootId::try_from(3).unwrap(),
+            Id::try_from(2).unwrap(),
+            Id::try_from(2).unwrap(),
+            130,
+        ));
+
+        graph
+    }
+
+    fn cyclic_graph() -> Graph {
+        let mut graph = Graph::default();
+
+        graph.push(Transaction::new(
+            NonRootId::try_from(2).unwrap(),
+            Id::try_from(1).unwrap(),
+            Id::try_from(3).unwrap(),
+            120,
+        ));
+
+        graph.push(Transaction::new(
+            NonRootId::try_from(3).unwrap(),
+            Id::try_from(1).unwrap(),
+            Id::try_from(4).unwrap(),
+            130,
+        ));
+
+        graph.push(Transaction::new(
+            NonRootId::try_from(4).unwrap(),
+            Id::try_from(1).unwrap(),
+            Id::try_from(2).unwrap(),
+            130,
+        ));
+
+        graph
+    }
+
+    fn unconnected_graph() -> Graph {
+        let mut graph = Graph::default();
+
+        graph.push(Transaction::new(
+            NonRootId::try_from(2).unwrap(),
+            Id::try_from(3).unwrap(),
+            Id::try_from(3).unwrap(),
+            120,
+        ));
+
+        graph.push(Transaction::new(
+            NonRootId::try_from(3).unwrap(),
+            Id::try_from(2).unwrap(),
+            Id::try_from(2).unwrap(),
+            130,
+        ));
+
+        graph
     }
 
     #[test]
@@ -179,5 +353,19 @@ mod graph_tests {
             Err(e) => panic!("Unexpected error type: {}", e),
             Ok(_) => panic!("Unexpected success"),
         }
+    }
+
+    #[test]
+    fn bipartite() {
+        assert!(!graph().is_bipartite());
+        assert!(bp_graph().is_bipartite());
+    }
+
+    #[test]
+    fn connected_acyclic() {
+        assert_eq!(graph().is_connected_acyclic(), Some(true));
+        assert_eq!(bp_graph().is_connected_acyclic(), Some(true));
+        assert_eq!(cyclic_graph().is_connected_acyclic(), Some(false));
+        assert_eq!(unconnected_graph().is_connected_acyclic(), None);
     }
 }

@@ -90,6 +90,12 @@ impl Into<usize> for Id {
     }
 }
 
+impl From<NonRootId> for Id {
+    fn from(value: NonRootId) -> Self {
+        Id::Transaction(value)
+    }
+}
+
 #[cfg(test)]
 mod id_tests {
     use super::{Id, NonRootId};

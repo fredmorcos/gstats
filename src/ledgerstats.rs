@@ -1,7 +1,7 @@
 #![warn(clippy::all)]
 
 use graphstats::graph::Graph;
-use log::{error, info};
+use log::{error, info, warn};
 use std::convert::TryFrom;
 use std::fs::File;
 use std::io::BufReader;
@@ -12,6 +12,9 @@ use structopt::StructOpt;
 struct Opt {
     #[structopt(name = "input-file", help = "Input file")]
     input: String,
+
+    #[structopt(short = "-d", help = "Disable (slow) graph validation")]
+    no_validation: bool,
 }
 
 // Main's return type feature could have been used, but unfortunately it means that the
@@ -37,5 +40,25 @@ fn main() {
     info!("Graph:");
     for transaction in graph.transactions() {
         info!("  {}", transaction);
+    }
+
+    if !opts.no_validation {
+        match graph.is_connected_acyclic() {
+            Some(true) => info!("Graph is connected and acyclic"),
+            Some(false) => {
+                error!("Graph is connected but cyclic, this is not supported");
+                process::exit(3);
+            }
+            None => {
+                error!("Graph is unconnected, this is not supported");
+                process::exit(4);
+            }
+        }
+
+        if !graph.is_bipartite() {
+            warn!("Graph is not bipartite, this should not be a problem");
+        } else {
+            info!("Graph is bipartite");
+        }
     }
 }
