@@ -64,6 +64,14 @@ fn main() {
         }
     }
 
+    let n_transactions = match f64::value_from(graph.len()) {
+        Ok(n) => n,
+        Err(e) => {
+            error!("Error converting graph length to float: {}", e);
+            std::process::exit(1);
+        }
+    };
+
     let mut stats: Vec<Box<dyn Stat>> = vec![
         Box::new(stats::Depths::new(&graph)),
         Box::new(stats::InReferences::new(&graph)),
@@ -76,14 +84,6 @@ fn main() {
             stat.accumulate(transaction);
         }
     }
-
-    let n_transactions = match f64::value_from(graph.len()) {
-        Ok(n) => n,
-        Err(e) => {
-            error!("Error converting graph length to float: {}", e);
-            std::process::exit(1);
-        }
-    };
 
     for stat in stats {
         match stat.result(n_transactions) {
