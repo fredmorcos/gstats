@@ -116,7 +116,7 @@ impl Graph {
         self.reverse.get(&id)
     }
 
-    fn push(&mut self, transaction: Transaction) {
+    pub fn push(&mut self, transaction: Transaction) {
         // Insert a new entry for incoming references to the left reference of the
         // transaction.
         let left_references = self
