@@ -13,6 +13,7 @@ env_logger = "=0.6.2"
 structopt = "=0.2.18"
 derive_more = "=0.15.0"
 conv = "=0.3.3"
+rand = "=0.7.0"
 
 [lib]
 name = "graphstats"
@@ -21,3 +22,7 @@ path = "src/lib.rs"
 [[bin]]
 name = "ledgerstats"
 path = "src/ledgerstats.rs"
+
+[[bin]]
+name = "bpdaggen"
+path = "src/bpdaggen.rs"
