@@ -70,6 +70,10 @@ impl Transaction {
     pub fn right(&self) -> Id {
         self.right
     }
+
+    pub fn timestamp(&self) -> usize {
+        self.timestamp
+    }
 }
 
 impl TryFrom<(usize, &String)> for Transaction {

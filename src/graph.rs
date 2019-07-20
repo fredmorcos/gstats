@@ -1,5 +1,7 @@
 #![warn(clippy::all)]
 
+//! Graph and reference structures.
+
 use crate::id::{Id, NonRootId};
 use crate::transaction::{self, Transaction};
 use derive_more::Display;
@@ -7,6 +9,7 @@ use std::collections::{HashMap as Map, HashSet as Set};
 use std::convert::TryFrom;
 use std::io::{self, BufRead, BufReader, Read};
 use std::num::ParseIntError;
+use std::ops::Index;
 use std::str::FromStr;
 
 /// Errors that can happen when dealing with graphs.
@@ -49,6 +52,34 @@ impl From<transaction::Error> for Error {
     }
 }
 
+/// Structure for book-keeping of references to transactions.
+#[derive(PartialEq, Eq, Debug, Default)]
+pub struct References {
+    /// The list of transactions referring to this transaction.
+    inner: Set<NonRootId>,
+
+    /// The number of transactions referring to this transaction. Note that this number
+    /// could be higher than self.inner.len() and this is why its kept separately.
+    count: usize,
+}
+
+impl References {
+    pub fn count(&self) -> usize {
+        self.count
+    }
+
+    /// Insert the new source transaction for the incoming reference and increment the
+    /// number of incoming references.
+    fn add(&mut self, id: NonRootId) {
+        self.inner.insert(id);
+        self.count += 1;
+    }
+
+    fn sources(&self) -> impl Iterator<Item = &'_ NonRootId> + '_ {
+        self.inner.iter()
+    }
+}
+
 /// Primary `Graph` data structure.
 #[derive(PartialEq, Eq, Debug, Default)]
 pub struct Graph {
@@ -58,7 +89,7 @@ pub struct Graph {
     /// The reverse references. A map from transaction `Id`s (including the Root
     /// transaction) to the set of transactions pointing to it, including the number of
     /// edges pointing to it.
-    reverse: Map<Id, Set<NonRootId>>,
+    reverse: Map<Id, References>,
 }
 
 impl Graph {
@@ -81,7 +112,7 @@ impl Graph {
         self.inner.iter()
     }
 
-    fn references(&self, id: Id) -> Option<&Set<NonRootId>> {
+    pub fn references(&self, id: Id) -> Option<&References> {
         self.reverse.get(&id)
     }
 
@@ -91,22 +122,22 @@ impl Graph {
         let left_references = self
             .reverse
             .entry(transaction.left())
-            .or_insert_with(Set::new);
+            .or_insert_with(References::default);
 
         // Insert the new source transaction for the incoming reference and increment the
         // number of incoming references.
-        left_references.insert(transaction.id());
+        left_references.add(transaction.id());
 
         // Insert a new entry for incoming references to the right reference of the
         // transaction.
         let right_references = self
             .reverse
             .entry(transaction.right())
-            .or_insert_with(Set::new);
+            .or_insert_with(References::default);
 
         // Insert the new source transaction for the incoming reference and increment the
         // number of incoming references.
-        right_references.insert(transaction.id());
+        right_references.add(transaction.id());
 
         self.inner.push(transaction);
     }
@@ -122,7 +153,7 @@ impl Graph {
             visited.insert(vertex);
 
             if let Some(references) = graph.references(vertex) {
-                for next in references {
+                for next in references.sources() {
                     if !helper(graph, Id::Transaction(*next), history.clone(), visited) {
                         return false;
                     }
@@ -161,7 +192,7 @@ impl Graph {
 
             if let Some(references) = graph.references(vertex) {
                 // Recursively follow in-references with the opposite color.
-                for next in references {
+                for next in references.sources() {
                     if !helper(graph, Id::from(*next), !color, colors) {
                         return false;
                     }
@@ -176,6 +207,51 @@ impl Graph {
         // be inverse-reachable from the Root.
         let mut colors = Map::new();
         helper(self, Id::Root, false, &mut colors)
+    }
+
+    /// Typical recursive depth implementation with a memoization/cache. Assumes the graph
+    /// is acyclic.
+    pub fn depth(&self, id: NonRootId, cache: &mut Map<NonRootId, usize>) -> usize {
+        if let Some(depth) = cache.get(&id) {
+            // The depth has already been computed due to some other depth lookup, just
+            // return it from the cache.
+            return *depth;
+        }
+
+        let transaction = &self[id];
+
+        // Lookup the left reference and compute its depth. If the left reference refers
+        // to the Root transaction then the current transaction's depth is 1, otherwise
+        // it's the left transaction's depth + 1.
+        let left_depth = if let Id::Transaction(left_id) = transaction.left() {
+            self.depth(left_id, cache) + 1
+        } else {
+            1
+        };
+
+        // Lookup the right reference and compute its depth. If the right reference refers
+        // to the Root transaction then the current transaction's depth is 1, otherwise
+        // it's the right transaction's depth + 1.
+        let right_depth = if let Id::Transaction(right_id) = transaction.right() {
+            self.depth(right_id, cache) + 1
+        } else {
+            1
+        };
+
+        // The depth is the shorter path of the two possibilities. Store it in the cache
+        // for future lookup.
+        let depth = left_depth.min(right_depth);
+        cache.insert(id, depth);
+        depth
+    }
+}
+
+impl Index<NonRootId> for Graph {
+    type Output = Transaction;
+
+    fn index(&self, index: NonRootId) -> &Self::Output {
+        let index: usize = index.into();
+        &self.inner[index - 2]
     }
 }
 

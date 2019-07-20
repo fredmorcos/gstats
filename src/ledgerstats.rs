@@ -1,6 +1,8 @@
 #![warn(clippy::all)]
 
+use conv::ValueFrom;
 use graphstats::graph::Graph;
+use graphstats::stats::{self, Stat};
 use log::{error, info, warn};
 use std::convert::TryFrom;
 use std::fs::File;
@@ -59,6 +61,37 @@ fn main() {
             warn!("Graph is not bipartite, this should not be a problem");
         } else {
             info!("Graph is bipartite");
+        }
+    }
+
+    let mut stats: Vec<Box<dyn Stat>> = vec![
+        Box::new(stats::Depths::new(&graph)),
+        Box::new(stats::InReferences::new(&graph)),
+        Box::new(stats::TimeUnits::default()),
+        Box::new(stats::Timestamps::new(&graph)),
+    ];
+
+    for transaction in graph.transactions() {
+        for stat in &mut stats {
+            stat.accumulate(transaction);
+        }
+    }
+
+    let n_transactions = match f64::value_from(graph.len()) {
+        Ok(n) => n,
+        Err(e) => {
+            error!("Error converting graph length to float: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    for stat in stats {
+        match stat.result(n_transactions) {
+            Ok(r) => println!("{}", r),
+            Err(e) => {
+                error!("Error calculating result: {}", e);
+                std::process::exit(1);
+            }
         }
     }
 }
