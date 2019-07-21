@@ -1,9 +1,9 @@
 [package]
-name = "ledgerstats"
+name = "gstats"
 version = "0.1.0"
 authors = ["Fred Morcos <fred.morcos@gmail.com>"]
 edition = "2018"
-description = "Ledger statistics"
+description = "Graph statistics"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -20,8 +20,8 @@ name = "graphstats"
 path = "src/lib.rs"
 
 [[bin]]
-name = "ledgerstats"
-path = "src/ledgerstats.rs"
+name = "gstats"
+path = "src/gstats.rs"
 
 [[bin]]
 name = "bpdaggen"
