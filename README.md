@@ -4,7 +4,7 @@ Gstats is a project comprising of some command-line tools and a
 library for handling directed acyclic graphs with unweighted edges and
 an outgoing degree of exactly 2. In addition to two outgoing edges,
 vertices on the graph have a timestamp property. The two command-line
-tools currently available are `gstats` and `bddaggen`. The library is
+tools currently available are `gstats` and `bpdaggen`. The library is
 named `graphstats`. The project is implemented using Rust.
 
 ## Building
