@@ -86,17 +86,17 @@ impl TryFrom<(usize, &String)> for Transaction {
 
         // Read the left reference.
         let left = iter.next().ok_or(Error::MissingLeft)?;
-        let left = usize::from_str(&left).map_err(Error::InvalidLeft)?;
+        let left = usize::from_str(left).map_err(Error::InvalidLeft)?;
         let left = Id::try_from(left).map_err(Error::InvalidLeftId)?;
 
         // Read the right reference.
         let right = iter.next().ok_or(Error::MissingRight)?;
-        let right = usize::from_str(&right).map_err(Error::InvalidRight)?;
+        let right = usize::from_str(right).map_err(Error::InvalidRight)?;
         let right = Id::try_from(right).map_err(Error::InvalidRightId)?;
 
         // Read the timestamp.
         let timestamp = iter.next().ok_or(Error::MissingTimestamp)?;
-        let timestamp = usize::from_str(&timestamp).map_err(Error::InvalidTimestamp)?;
+        let timestamp = usize::from_str(timestamp).map_err(Error::InvalidTimestamp)?;
 
         Ok(Self::new(id, left, right, timestamp))
     }
@@ -151,7 +151,7 @@ mod transaction_tests {
     fn parse_invalid_left() {
         let input = String::from("abc");
         let res = Transaction::try_from((2, &input));
-        let err = usize::from_str_radix("abc", 10).err().unwrap();
+        let err = "abc".parse::<usize>().err().unwrap();
         assert_eq!(res, Err(Error::InvalidLeft(err)));
     }
 
@@ -159,7 +159,7 @@ mod transaction_tests {
     fn parse_invalid_right() {
         let input = String::from("5 abc");
         let res = Transaction::try_from((2, &input));
-        let err = usize::from_str_radix("abc", 10).err().unwrap();
+        let err = "abc".parse::<usize>().err().unwrap();
         assert_eq!(res, Err(Error::InvalidRight(err)));
     }
 
@@ -167,7 +167,7 @@ mod transaction_tests {
     fn parse_invalid_timestamp() {
         let input = String::from("5 6 abc");
         let res = Transaction::try_from((2, &input));
-        let err = usize::from_str_radix("abc", 10).err().unwrap();
+        let err = "abc".parse::<usize>().err().unwrap();
         assert_eq!(res, Err(Error::InvalidTimestamp(err)));
     }
 

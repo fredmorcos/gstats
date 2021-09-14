@@ -422,7 +422,7 @@ mod graph_tests {
         let input = String::from("\n1 1 120\n2 1 130");
         let input = input.as_bytes();
         let res = Graph::try_from(BufReader::new(input));
-        let parse_err = usize::from_str_radix("", 10).err().unwrap();
+        let parse_err = "".parse::<usize>().err().unwrap();
 
         match res {
             Err(Error::InvalidNumberOfTransactions(e)) => assert_eq!(e, parse_err),

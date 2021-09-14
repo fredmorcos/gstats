@@ -33,9 +33,9 @@ impl TryFrom<usize> for NonRootId {
     }
 }
 
-impl Into<usize> for NonRootId {
-    fn into(self) -> usize {
-        self.0.get()
+impl From<NonRootId> for usize {
+    fn from(v: NonRootId) -> Self {
+        v.0.get()
     }
 }
 
@@ -81,9 +81,9 @@ impl TryFrom<usize> for Id {
     }
 }
 
-impl Into<usize> for Id {
-    fn into(self) -> usize {
-        match self {
+impl From<Id> for usize {
+    fn from(v: Id) -> Self {
+        match v {
             Id::Root => 1,
             Id::Transaction(id) => id.into(),
         }
