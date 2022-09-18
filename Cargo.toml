@@ -9,9 +9,9 @@ description = "Graph statistics"
 
 [dependencies]
 log = "0.4"
-env_logger = "0.6"
-structopt = "0.2"
-derive_more = "0.15"
+env_logger = "0.9"
+structopt = "0.3"
+derive_more = "0.99"
 conv = "0.3"
 rand = "0.7"
 

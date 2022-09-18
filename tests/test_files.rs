@@ -2,6 +2,7 @@ use conv::ValueFrom;
 use graphstats::graph::Graph;
 use graphstats::stats::{self, Stat};
 use std::convert::TryFrom;
+use std::fmt::Write;
 use std::fs::{self, File};
 use std::io::BufReader;
 
@@ -36,7 +37,12 @@ fn test_files() {
             let mut actual_output = String::new();
 
             for stat in stats {
-                actual_output.push_str(&format!("{}\n", stat.result(n_transactions).unwrap()));
+                writeln!(
+                    &mut actual_output,
+                    "{}",
+                    stat.result(n_transactions).unwrap()
+                )
+                .unwrap();
             }
 
             path.set_extension("out");
